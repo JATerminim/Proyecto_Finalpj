@@ -1,57 +1,87 @@
-import streamlit as st
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
+import streamlit as st
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-import joblib
+from sklearn.metrics import accuracy_score, confusion_matrix, roc_curve, auc
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pickle  # Using pickle for model persistence
 
-# Título de la aplicación
-st.title("Predicción de Aprobación de Préstamos")
+# Load pre-trained model (replace with your model path)
+model_path = "mymodel.joblib"
+with open(model_path, "rb") as f:
+    model = pickle.load(f)
 
-# Cargar el modelo pre-entrenado
-try:
-    model = joblib.load("mymodel.joblib")  # Asegúrate de que la ruta sea correcta
-except FileNotFoundError:
-    st.error("No se encontró el modelo entrenado. Verifica la ruta del archivo 'mymodel.joblib'.")
-    exit()
+# Function for data preprocessing
+def preprocess_data(data):
+    categorical_cols = [col for col in data.columns if data[col].dtype == object]
+    numerical_cols = [col for col in data.columns if col not in categorical_cols]
 
-# Utilizar el DataFrame existente (asumiendo que 'total_data' ya está definido)
-# ... (Asegúrate de que 'total_data' contenga los datos correctos y las columnas esperadas)
+    # Handle missing values (consider imputation techniques if needed)
+    data.fillna(data.mean(), inplace=True)  # Replace with a more robust method
 
-# Separar las características (X) y la variable objetivo (y)
-try:
-    X = total_data.drop(columns=["Loan_Status", "Property_Area", "Loan_ID"], axis=1)
-except KeyError:
-    st.error("Error: Alguna de las columnas especificadas no existe en el DataFrame.")
-    st.write("Columnas disponibles:", total_data.columns)
-    exit()
+    # Label encoding for categorical features
+    le = LabelEncoder()
+    for col in categorical_cols:
+        data[col] = le.fit_transform(data[col])
 
-y = total_data["Loan_Status"]
+    # Feature scaling for numerical features
+    scaler = StandardScaler()
+    data[numerical_cols] = scaler.fit_transform(data[numerical_cols])
 
-# Crear un formulario para ingresar los datos del usuario
-st.subheader("Ingresa los datos del solicitante")
+    return data
 
-# Crear campos de entrada para cada característica (ajusta los nombres y tipos según tus datos)
-user_input = {}
-for col in X.columns:
-    user_input[col] = st.number_input(col, min_value=X[col].min(), max_value=X[col].max())
+# Function for prediction
+def predict(data):
+    preprocessed_data = preprocess_data(data.copy())
+    features = preprocessed_data.drop("Loan_Status", axis=1)
+    prediction = model.predict(features)[0]
+    return prediction
 
-# Escalar los datos de entrada del usuario
-scaler = StandardScaler()
-user_input_scaled = scaler.fit_transform(pd.DataFrame([user_input]).values)
+# Streamlit App Layout
+st.title("Loan Approval Prediction")
 
-# Realizar la predicción
-prediction = model.predict(user_input_scaled)[0]
-probability = model.predict_proba(user_input_scaled).max() * 100
+# User input section
+st.subheader("Enter Applicant Information")
+user_data = {}
+for col in ["Gender", "Married", "Dependents", "Education", "Self_Employed", "Applicant_Income", "Coapplicant_Income", "Loan_Amount", "Loan_Term"]:
+    user_data[col] = st.number_input(col)
 
-# Mostrar el resultado de la predicción
-if prediction == 1:
-    result = "Préstamo aprobado"
-else:
-    result = "Préstamo rechazado"
+# Convert categorical features to numerical (replace with dropdown menus if preferred)
+user_data["Gender"] = 0 if user_data["Gender"] == "Male" else 1
+user_data["Married"] = 0 if user_data["Married"] == "No" else 1
+user_data["Education"] = 0 if user_data["Education"] == "Graduate" else 1
+user_data["Self_Employed"] = 0 if user_data["Self_Employed"] == "No" else 1
 
-st.success(f"Resultado: {result}")
-st.write(f"Probabilidad: {probability:.2f}%")
+# Prediction button
+if st.button("Predict Loan Approval"):
+    prediction = predict(pd.DataFrame(user_data, index=[0]))
+    if prediction == 1:
+        st.success("Loan Approved!")
+    else:
+        st.warning("Loan Not Approved.")
 
-# Agregar información adicional (opcional)
-st.write("**Nota:** Esta predicción se basa en un modelo de machine learning y puede no ser 100% precisa. Consulta con un experto financiero para una evaluación más completa.")
+# Display total data information (assuming you have pre-loaded total_data)
+st.subheader("Total Data Information")
+if "total_data" in st.session_state:  # Check if data is loaded in the session
+    st.write(st.session_state["total_data"].describe(include="all"))
+
+# Descriptive statistics for numerical variables
+if "total_data" in st.session_state:
+    describe_numericals(st.session_state["total_data"], [col for col in st.session_state["total_data"].columns if col not in ["Loan_Status", "Property_Area", "Loan_ID"]])
+
+# Correlation matrix (consider using interactive libraries like plotly)
+if "total_data" in st.session_state:
+    plot_correlation_matrix(st.session_state["total_data"], [col for col in st.session_state["total_data"].columns if col not in ["Loan_Status", "Property_Area", "Loan_ID"]])
+
+# Load total data for further analysis (optional)
+upload_data = st.file_uploader("Upload Data (CSV)", type=["csv"])
+if upload_data is not None:
+    total_data = pd.read_csv(upload_data)
+    st.session_state["total_data"] = total_data
+
+# Function for descriptive statistics of numerical variables (optional for reusability)
+def describe_numericals(data, numerical_cols):
+    st.subheader("Descriptive Statistics (Numerical Variables)")
+    st.write(data[numerical_cols].describe(include='all'))
