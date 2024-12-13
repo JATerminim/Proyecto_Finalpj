@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, roc_curve, roc_auc_score, accuracy_score
+from sklearn.metrics import accuracy_score, confusion_matrix, roc_curve, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.impute import SimpleImputer
@@ -21,8 +21,14 @@ test_data = pd.read_csv(data_path2)
 total_data = pd.concat([train_data, test_data], ignore_index=True)
 
 # Imputación de valores faltantes y codificación
+categorical = [var for var in total_data.columns if total_data[var].dtype == 'object']
+numerical = [var for var in total_data.columns if total_data[var].dtype != 'object']
+
 imputer_cat = SimpleImputer(strategy='most_frequent')
 imputer_num = SimpleImputer(strategy='median')
+
+total_data.loc[:, categorical] = imputer_cat.fit_transform(total_data[categorical])
+total_data.loc[:, numerical] = imputer_num.fit_transform(total_data[numerical])
 
 total_data["Gender"] = total_data["Gender"].apply(lambda x: 1 if x == "Male" else 0)
 total_data["Self_Employed"] = total_data["Self_Employed"].apply(lambda x: 1 if x == "Yes" else 0)
@@ -31,27 +37,7 @@ total_data["Education"] = total_data["Education"].apply(lambda x: 1 if x == "Gra
 total_data["Married"] = total_data["Married"].apply(lambda x: 1 if x == "Yes" else 0)
 total_data["Dependents"] = total_data["Dependents"].replace("3+", "3")
 
-categorical = ["Gender", "Married", "Education", "Self_Employed", "Dependents"]
-numerical = [col for col in total_data.columns if total_data[col].dtype != 'object' and col not in ['Loan_Status', 'Loan_ID', 'Property_Area']]
-
-total_data[categorical] = imputer_cat.fit_transform(total_data[categorical])
-total_data[numerical] = imputer_num.fit_transform(total_data[numerical])
-
-# Dividir los datos para entrenamiento y prueba
-X = total_data.drop(columns=['Loan_Status', 'Property_Area', 'Loan_ID'])
-y = total_data["Loan_Status"]
-
-# Normalización de las características numéricas
-scaler = StandardScaler()
-X[numerical] = scaler.fit_transform(X[numerical])
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Asegurarse de que y_test y y_pred sean del mismo tipo
-y_pred = model.predict(X_test)
-y_test = y_test.astype(int)
-y_pred = y_pred.astype(int)
-grid_accuracy = accuracy_score(y_test, y_pred)
+categorical.remove('Loan_ID')
 
 # Configuración de la página
 st.set_page_config(page_title="Predicción de Aprobación de Préstamos", layout="wide")
@@ -118,17 +104,23 @@ fig, ax = plt.subplots(figsize=(10, 8))
 sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', ax=ax)
 st.pyplot(fig)
 
-# Mostrar el modelo seleccionado
-st.header("Modelo Seleccionado")
-st.write("Modelo: Regresión Logística")
+# Preparación de los datos para el modelo
+scaler = StandardScaler()
+total_data[numerical] = scaler.fit_transform(total_data[numerical])
 
-# Mostrar los resultados de la optimización de parámetros
-st.header("Resultados de Optimización de Parámetros")
-st.write("Mejores hiperparámetros: {'penalty': 'l1', 'C': 10, 'solver': 'liblinear'}")  # Ajustar según los resultados del grid search
+X = total_data.drop(columns=['Loan_Status', 'Property_Area', 'Loan_ID'])
+y = total_data["Loan_Status"]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Entrenamiento y predicción del modelo
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
 
 # Mostrar el valor del accuracy del model.py
 st.header("Valor del Accuracy")
-st.write(f"Accuracy del modelo optimizado: 0.85")  # Ajustar según los resultados en model.py
+accuracy = accuracy_score(y_test, y_pred)
+st.write(f"Accuracy del modelo optimizado: {accuracy:.2f}")  # Ajustar según los resultados en model.py
 
 # Gráficos de la matriz de dispersión y curva ROC
 st.header("Matriz de Dispersión y Curva ROC")
@@ -165,6 +157,7 @@ loan_amount_term = st.number_input("Plazo del Préstamo (en meses)", min_value=0
 credit_history = st.selectbox("Historial de Crédito", ["1.0", "0.0"])
 applicant_income = st.number_input("Ingreso del Solicitante", min_value=0.0, step=0.1)
 coapplicant_income = st.number_input("Ingreso del Co-Solicitante", min_value=0.0, step=0.1)
+
 
 # Crear un DataFrame con las mismas columnas y en el mismo orden que X
 input_data = pd.DataFrame({
