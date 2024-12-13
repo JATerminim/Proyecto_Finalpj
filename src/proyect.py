@@ -1,87 +1,183 @@
-import pandas as pd
 import streamlit as st
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, confusion_matrix, roc_curve, auc
-import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
-import pickle  # Using pickle for model persistence
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, roc_curve, roc_auc_score, accuracy_score
+import joblib
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
 
-# Load pre-trained model (replace with your model path)
+# Cargar el modelo
 model_path = "mymodel.joblib"
-with open(model_path, "rb") as f:
-    model = pickle.load(f)
+model = joblib.load(model_path)
 
-# Function for data preprocessing
-def preprocess_data(data):
-    categorical_cols = [col for col in data.columns if data[col].dtype == object]
-    numerical_cols = [col for col in data.columns if col not in categorical_cols]
+# Cargar datos
+data_path1 = "/home/vscode/.cache/kagglehub/datasets/krishnaraj30/finance-loan-approval-prediction-data/versions/1/train.csv"
+data_path2 = "/home/vscode/.cache/kagglehub/datasets/krishnaraj30/finance-loan-approval-prediction-data/versions/1/test.csv"
+train_data = pd.read_csv(data_path1)
+test_data = pd.read_csv(data_path2)
+total_data = pd.concat([train_data, test_data], ignore_index=True)
 
-    # Handle missing values (consider imputation techniques if needed)
-    data.fillna(data.mean(), inplace=True)  # Replace with a more robust method
+# Variables categóricas y numéricas
+categorical = [var for var in total_data.columns if total_data[var].dtype == 'object']
+numerical = [var for var in total_data.columns if total_data[var].dtype != 'object']
 
-    # Label encoding for categorical features
-    le = LabelEncoder()
-    for col in categorical_cols:
-        data[col] = le.fit_transform(data[col])
+# Convertir variables categóricas a numéricas
+total_data["Gender"] = total_data["Gender"].apply(lambda x: 1 if x == "Male" else 0)
+total_data["Self_Employed"] = total_data["Self_Employed"].apply(lambda x: 1 if x == "Yes" else 0)
+total_data["Loan_Status"] = total_data["Loan_Status"].apply(lambda x: 1 if x == "Y" else 0)
+total_data["Education"] = total_data["Education"].apply(lambda x: 1 if x == "Graduate" else 0)
+total_data["Married"] = total_data["Married"].apply(lambda x: 1 if x == "Yes" else 0)
+total_data["Dependents"] = total_data["Dependents"].replace("3+", "3")
 
-    # Feature scaling for numerical features
-    scaler = StandardScaler()
-    data[numerical_cols] = scaler.fit_transform(data[numerical_cols])
+# Imputación de valores faltantes
+imputer_cat = SimpleImputer(strategy='most_frequent')
+imputer_num = SimpleImputer(strategy='median')
+total_data[categorical] = imputer_cat.fit_transform(total_data[categorical])
+total_data[numerical] = imputer_num.fit_transform(total_data[numerical])
 
-    return data
+# Dividir los datos para entrenamiento y prueba
+X = total_data.drop(columns=['Loan_Status','Property_Area','Loan_ID'], axis=1)
+y = total_data["Loan_Status"]
 
-# Function for prediction
-def predict(data):
-    preprocessed_data = preprocess_data(data.copy())
-    features = preprocessed_data.drop("Loan_Status", axis=1)
-    prediction = model.predict(features)[0]
-    return prediction
+# Normalización de las características numéricas
+scaler = StandardScaler()
+X[numerical] = scaler.fit_transform(X[numerical])
 
-# Streamlit App Layout
-st.title("Loan Approval Prediction")
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# User input section
-st.subheader("Enter Applicant Information")
-user_data = {}
-for col in ["Gender", "Married", "Dependents", "Education", "Self_Employed", "Applicant_Income", "Coapplicant_Income", "Loan_Amount", "Loan_Term"]:
-    user_data[col] = st.number_input(col)
+# Asegurarse de que y_test y y_pred sean del mismo tipo
+y_pred = model.predict(X_test)
+y_test = y_test.astype(int)
+y_pred = y_pred.astype(int)
+grid_accuracy = accuracy_score(y_test, y_pred)
 
-# Convert categorical features to numerical (replace with dropdown menus if preferred)
-user_data["Gender"] = 0 if user_data["Gender"] == "Male" else 1
-user_data["Married"] = 0 if user_data["Married"] == "No" else 1
-user_data["Education"] = 0 if user_data["Education"] == "Graduate" else 1
-user_data["Self_Employed"] = 0 if user_data["Self_Employed"] == "No" else 1
+# Configuración de la página
+st.set_page_config(page_title="Predicción de Aprobación de Préstamos", layout="wide")
 
-# Prediction button
-if st.button("Predict Loan Approval"):
-    prediction = predict(pd.DataFrame(user_data, index=[0]))
-    if prediction == 1:
-        st.success("Loan Approved!")
-    else:
-        st.warning("Loan Not Approved.")
+# Título de la aplicación
+st.title("Predicción de Aprobación de Préstamos")
+st.write("Visualización y predicción usando un modelo de regresión logística optimizado")
 
-# Display total data information (assuming you have pre-loaded total_data)
-st.subheader("Total Data Information")
-if "total_data" in st.session_state:  # Check if data is loaded in the session
-    st.write(st.session_state["total_data"].describe(include="all"))
+# Sección de visualización del dataset
+st.header("Visualización del Dataset")
+st.write(total_data)
 
-# Descriptive statistics for numerical variables
-if "total_data" in st.session_state:
-    describe_numericals(st.session_state["total_data"], [col for col in st.session_state["total_data"].columns if col not in ["Loan_Status", "Property_Area", "Loan_ID"]])
+# Estadísticos descriptivos
+st.header("Estadísticos Descriptivos")
+st.write(total_data.describe())
 
-# Correlation matrix (consider using interactive libraries like plotly)
-if "total_data" in st.session_state:
-    plot_correlation_matrix(st.session_state["total_data"], [col for col in st.session_state["total_data"].columns if col not in ["Loan_Status", "Property_Area", "Loan_ID"]])
+# Gráficos de variables categóricas
+st.header("Gráficos de Variables Categóricas")
+fig, axes = plt.subplots(len(categorical), 1, figsize=(10, len(categorical) * 3))
+for i, column in enumerate(categorical):
+    sns.countplot(data=total_data, x=column, ax=axes[i])
+st.pyplot(fig)
 
-# Load total data for further analysis (optional)
-upload_data = st.file_uploader("Upload Data (CSV)", type=["csv"])
-if upload_data is not None:
-    total_data = pd.read_csv(upload_data)
-    st.session_state["total_data"] = total_data
+# Gráficos de variables numéricas
+st.header("Gráficos de Variables Numéricas")
+fig, axes = plt.subplots(len(numerical), 1, figsize=(10, len(numerical) * 3))
+for i, column in enumerate(numerical):
+    sns.histplot(data=total_data, x=column, kde=True, ax=axes[i])
+st.pyplot(fig)
 
-# Function for descriptive statistics of numerical variables (optional for reusability)
-def describe_numericals(data, numerical_cols):
-    st.subheader("Descriptive Statistics (Numerical Variables)")
-    st.write(data[numerical_cols].describe(include='all'))
+# Identificación de valores faltantes
+st.header("Valores Faltantes")
+st.write(total_data.isnull().sum())
+
+# Identificación de outliers
+st.header("Outliers")
+fig, axes = plt.subplots(len(numerical), 1, figsize=(10, len(numerical) * 3))
+for i, column in enumerate(numerical):
+    sns.boxplot(data=total_data, x=column, ax=axes[i])
+st.pyplot(fig)
+
+# Matriz de correlación
+st.header("Matriz de Correlación")
+corr_matrix = total_data[numerical].corr()
+fig, ax = plt.subplots(figsize=(10, 8))
+sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', ax=ax)
+st.pyplot(fig)
+
+# Mostrar el modelo seleccionado
+st.header("Modelo Seleccionado")
+st.write("Modelo: Regresión Logística")
+
+# Mostrar los resultados de la optimización de parámetros
+st.header("Resultados de Optimización de Parámetros")
+st.write("Mejores hiperparámetros: {'penalty': 'l1', 'C': 10, 'solver': 'liblinear'}")  # Ajustar según los resultados del grid search
+
+# Mostrar el valor del accuracy
+st.header("Valor del Accuracy")
+st.write(f"Accuracy del modelo optimizado: {grid_accuracy}")
+
+# Gráficos de la matriz de dispersión y curva ROC
+st.header("Matriz de Dispersión y Curva ROC")
+st.subheader("Matriz de Dispersión")
+cm = confusion_matrix(y_test, y_pred)
+fig, ax = plt.subplots()
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+ax.set_title("Matriz de Dispersión")
+ax.set_xlabel("Predicción")
+ax.set_ylabel("Verdadero")
+st.pyplot(fig)
+
+st.subheader("Curva ROC")
+fpr, tpr, thresholds = roc_curve(y_test, y_pred)
+auc_score = roc_auc_score(y_test, y_pred)
+fig, ax = plt.subplots()
+ax.plot(fpr, tpr, label=f'ROC Curve (area = {auc_score:.2f})')
+ax.plot([0, 1], [0, 1], 'r--', label='No Skill')
+ax.set_xlabel('False Positive Rate')
+ax.set_ylabel('True Positive Rate')
+ax.set_title('Curva ROC')
+ax.legend()
+st.pyplot(fig)
+
+# Predicción con valores del usuario
+st.header("Predicción")
+st.write("Ingrese los valores para hacer una predicción:")
+gender = st.selectbox("Género", ["Male", "Female"])
+married = st.selectbox("Casado", ["Yes", "No"])
+education = st.selectbox("Educación", ["Graduate", "Not Graduate"])
+self_employed = st.selectbox("Autoempleado", ["Yes", "No"])
+dependents = st.selectbox("Dependientes", ["0", "1", "2", "3+"])
+loan_amount = st.number_input("Cantidad del Préstamo", min_value=0.0, step=0.1)
+loan_amount_term = st.number_input("Plazo del Préstamo (en meses)", min_value=0)
+credit_history = st.selectbox("Historial de Crédito", ["1.0", "0.0"])
+applicant_income = st.number_input("Ingreso del Solicitante", min_value=0.0, step=0.1)
+coapplicant_income = st.number_input("Ingreso del Co-Solicitante", min_value=0.0, step=0.1)
+
+# Crear un DataFrame con las mismas columnas y en el mismo orden que X
+input_data = pd.DataFrame({
+    'Gender': [1 if gender == "Male" else 0],
+    'Married': [1 if married == "Yes" else 0],
+    'Education': [1 if education == "Graduate" else 0],
+    'Self_Employed': [1 if self_employed == "Yes" else 0],
+    'Dependents': [dependents.replace("3+", "3")],
+    'ApplicantIncome': [applicant_income],
+    'CoapplicantIncome': [coapplicant_income],
+    'LoanAmount': [loan_amount],
+    'Loan_Amount_Term': [loan_amount_term],
+    'Credit_History': [float(credit_history)]
+})
+
+# Normalización de las características numéricas del input
+input_data[numerical] = scaler.transform(input_data[numerical])
+
+# Asegurar el orden de las columnas coincida con el del modelo entrenado
+input_data = input_data[X.columns]
+
+# Realizar la predicción
+prediction = model.predict(input_data)[0]
+
+# Mostrar el resultado de la predicción
+st.write("Predicción del Estado del Préstamo:", "Aprobado" if prediction == 1 else "Rechazado")
+
+# Sección de Referencias Bibliográficas
+st.header("Referencias Bibliográficas") 
+st.write(""" 
+         - Dataset de Kaggle: [Finance Loan Approval Prediction Data](https://www.kaggle.com/krishnaraj30/finance-loan-approval-prediction-data) 
+         - Documentación de Scikit-learn: [https://scikit-learn.org/stable/](https://scikit-learn.org/stable/) 
+         - Documentación de Streamlit: [https://docs.streamlit.io/](https://docs.streamlit.io/) """)
