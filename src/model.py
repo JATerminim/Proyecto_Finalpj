@@ -3,12 +3,12 @@ import matplotlib.pyplot as plt
 
 
 # Download latest version
-data_path1 = "/home/vscode/.cache/kagglehub/datasets/krishnaraj30/finance-loan-approval-prediction-data/versions/1/train.csv"  # Replace with the correct file path
-train_data = pd.read_csv(data_path1)
+# data_path1 = "/home/vscode/.cache/kagglehub/datasets/krishnaraj30/finance-loan-approval-prediction-data/versions/1/train.csv"  # Replace with the correct file path
+train_data = pd.read_csv("../src/train_data0")
 # train_data.head()
 
-data_path2 = "/home/vscode/.cache/kagglehub/datasets/krishnaraj30/finance-loan-approval-prediction-data/versions/1/test.csv"  # Replace with the correct file path
-test_data = pd.read_csv(data_path2)
+#data_path2 = "/home/vscode/.cache/kagglehub/datasets/krishnaraj30/finance-loan-approval-prediction-data/versions/1/test.csv"  # Replace with the correct file path
+test_data = pd.read_csv("../src/test_data0")
 
 # Suponiendo que train_data y test_data son DataFrames de Pandas
 total_data = pd.concat([train_data, test_data], ignore_index=True)

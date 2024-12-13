@@ -14,30 +14,10 @@ model_path = "mymodel.joblib"
 model = joblib.load(model_path)
 
 # Cargar datos
-data_path1 = "FileNotFoundError: [Errno 2] No such file or directory: '/home/vscode/.cache/kagglehub/datasets/krishnaraj30/finance-loan-approval-prediction-data/versions/1/train.csv'
-Traceback:
-
-File "/opt/render/project/src/src/proyect.py", line 19, in <module>
-    train_data = pd.read_csv(data_path1)
-                 ^^^^^^^^^^^^^^^^^^^^^^^
-File "/opt/render/project/src/.venv/lib/python3.11/site-packages/pandas/io/parsers/readers.py", line 1026, in read_csv
-    return _read(filepath_or_buffer, kwds)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-File "/opt/render/project/src/.venv/lib/python3.11/site-packages/pandas/io/parsers/readers.py", line 620, in _read
-    parser = TextFileReader(filepath_or_buffer, **kwds)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-File "/opt/render/project/src/.venv/lib/python3.11/site-packages/pandas/io/parsers/readers.py", line 1620, in __init__
-    self._engine = self._make_engine(f, self.engine)
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-File "/opt/render/project/src/.venv/lib/python3.11/site-packages/pandas/io/parsers/readers.py", line 1880, in _make_engine
-    self.handles = get_handle(
-                   ^^^^^^^^^^^
-File "/opt/render/project/src/.venv/lib/python3.11/site-packages/pandas/io/common.py", line 873, in get_handle
-    handle = open(
-             ^^^^^"
-data_path2 = "/home/vscode/.cache/kagglehub/datasets/krishnaraj30/finance-loan-approval-prediction-data/versions/1/test.csv"
-train_data = pd.read_csv(data_path1)
-test_data = pd.read_csv(data_path2)
+#data_path1 = "/home/vscode/.cache/kagglehub/datasets/krishnaraj30/finance-loan-approval-prediction-data/versions/1/train.csv"
+#data_path2 = "/home/vscode/.cache/kagglehub/datasets/krishnaraj30/finance-loan-approval-prediction-data/versions/1/test.csv"
+train_data = pd.read_csv("../src/train_data0")
+test_data = pd.read_csv("../src/test_data0")
 total_data = pd.concat([train_data, test_data], ignore_index=True)
 
 # Imputación de valores faltantes y codificación
