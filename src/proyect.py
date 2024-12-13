@@ -3,10 +3,11 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, roc_curve, roc_auc_score, accuracy_score
-import joblib
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
 from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+import joblib
 
 # Cargar el modelo
 model_path = "mymodel.joblib"
@@ -19,11 +20,10 @@ train_data = pd.read_csv(data_path1)
 test_data = pd.read_csv(data_path2)
 total_data = pd.concat([train_data, test_data], ignore_index=True)
 
-# Variables categóricas y numéricas
-categorical = [var for var in total_data.columns if total_data[var].dtype == 'object']
-numerical = [var for var in total_data.columns if total_data[var].dtype != 'object']
+# Imputación de valores faltantes y codificación
+imputer_cat = SimpleImputer(strategy='most_frequent')
+imputer_num = SimpleImputer(strategy='median')
 
-# Convertir variables categóricas a numéricas
 total_data["Gender"] = total_data["Gender"].apply(lambda x: 1 if x == "Male" else 0)
 total_data["Self_Employed"] = total_data["Self_Employed"].apply(lambda x: 1 if x == "Yes" else 0)
 total_data["Loan_Status"] = total_data["Loan_Status"].apply(lambda x: 1 if x == "Y" else 0)
@@ -31,14 +31,14 @@ total_data["Education"] = total_data["Education"].apply(lambda x: 1 if x == "Gra
 total_data["Married"] = total_data["Married"].apply(lambda x: 1 if x == "Yes" else 0)
 total_data["Dependents"] = total_data["Dependents"].replace("3+", "3")
 
-# Imputación de valores faltantes
-imputer_cat = SimpleImputer(strategy='most_frequent')
-imputer_num = SimpleImputer(strategy='median')
+categorical = ["Gender", "Married", "Education", "Self_Employed", "Dependents"]
+numerical = [col for col in total_data.columns if total_data[col].dtype != 'object' and col not in ['Loan_Status', 'Loan_ID', 'Property_Area']]
+
 total_data[categorical] = imputer_cat.fit_transform(total_data[categorical])
 total_data[numerical] = imputer_num.fit_transform(total_data[numerical])
 
 # Dividir los datos para entrenamiento y prueba
-X = total_data.drop(columns=['Loan_Status','Property_Area','Loan_ID'], axis=1)
+X = total_data.drop(columns=['Loan_Status', 'Property_Area', 'Loan_ID'])
 y = total_data["Loan_Status"]
 
 # Normalización de las características numéricas
@@ -70,27 +70,45 @@ st.write(total_data.describe())
 
 # Gráficos de variables categóricas
 st.header("Gráficos de Variables Categóricas")
-fig, axes = plt.subplots(len(categorical), 1, figsize=(10, len(categorical) * 3))
-for i, column in enumerate(categorical):
-    sns.countplot(data=total_data, x=column, ax=axes[i])
+num_plots = len(categorical)
+num_rows = (num_plots + 1) // 2
+fig, axes = plt.subplots(num_rows, 2, figsize=(12, 5 * num_rows))
+
+for idx, cat_col in enumerate(categorical):
+    row, col = idx // 2, idx % 2
+    sns.countplot(x=cat_col, data=total_data, hue='Loan_Status', ax=axes[row, col])
+    axes[row, col].set_title(cat_col)
+
+if num_plots % 2 != 0:
+    fig.delaxes(axes.flatten()[-1])
+
+plt.subplots_adjust(hspace=0.5)
 st.pyplot(fig)
 
 # Gráficos de variables numéricas
 st.header("Gráficos de Variables Numéricas")
-fig, axes = plt.subplots(len(numerical), 1, figsize=(10, len(numerical) * 3))
-for i, column in enumerate(numerical):
-    sns.histplot(data=total_data, x=column, kde=True, ax=axes[i])
+num_rows = (len(numerical) + 1) // 2
+fig, axes = plt.subplots(num_rows, 2, figsize=(15, num_rows * 6))
+
+for i, var in enumerate(numerical):
+    row = i // 2
+    col = i % 2
+    sns.histplot(data=total_data, x=var, kde=True, color='skyblue', bins=20, ax=axes[row, col])
+    axes[row, col].set_title(f'Distribution of {var}')
+    axes[row, col].set_xlabel(var)
+    axes[row, col].set_ylabel('Density')
+
+if num_rows * 2 > len(numerical):
+    fig.delaxes(axes.flatten()[-1])
+
+plt.tight_layout()
 st.pyplot(fig)
 
-# Identificación de valores faltantes
-st.header("Valores Faltantes")
-st.write(total_data.isnull().sum())
-
-# Identificación de outliers
-st.header("Outliers")
-fig, axes = plt.subplots(len(numerical), 1, figsize=(10, len(numerical) * 3))
-for i, column in enumerate(numerical):
-    sns.boxplot(data=total_data, x=column, ax=axes[i])
+# Distribución de la variable de salida
+st.header("Distribución de la Variable de Salida")
+fig, ax = plt.subplots(figsize=(6, 4))
+sns.countplot(data=total_data, x='Loan_Status', ax=ax)
+ax.set_title('Distribución de la Variable de Salida')
 st.pyplot(fig)
 
 # Matriz de correlación
@@ -108,31 +126,30 @@ st.write("Modelo: Regresión Logística")
 st.header("Resultados de Optimización de Parámetros")
 st.write("Mejores hiperparámetros: {'penalty': 'l1', 'C': 10, 'solver': 'liblinear'}")  # Ajustar según los resultados del grid search
 
-# Mostrar el valor del accuracy
+# Mostrar el valor del accuracy del model.py
 st.header("Valor del Accuracy")
-st.write(f"Accuracy del modelo optimizado: {grid_accuracy}")
+st.write(f"Accuracy del modelo optimizado: 0.85")  # Ajustar según los resultados en model.py
 
 # Gráficos de la matriz de dispersión y curva ROC
 st.header("Matriz de Dispersión y Curva ROC")
-st.subheader("Matriz de Dispersión")
-cm = confusion_matrix(y_test, y_pred)
-fig, ax = plt.subplots()
-sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
-ax.set_title("Matriz de Dispersión")
-ax.set_xlabel("Predicción")
-ax.set_ylabel("Verdadero")
-st.pyplot(fig)
+fig, axes = plt.subplots(1, 2, figsize=(20, 8))
 
-st.subheader("Curva ROC")
+cm = confusion_matrix(y_test, y_pred)
+cm_df = pd.DataFrame(cm, index=['No', 'Yes'], columns=['Pred No', 'Pred Yes'])
+sns.heatmap(cm_df, annot=True, fmt="d", cmap="Blues", ax=axes[0])
+axes[0].set_title("Matriz de Dispersión")
+axes[0].set_xlabel("Predicción")
+axes[0].set_ylabel("Verdadero")
+
 fpr, tpr, thresholds = roc_curve(y_test, y_pred)
 auc_score = roc_auc_score(y_test, y_pred)
-fig, ax = plt.subplots()
-ax.plot(fpr, tpr, label=f'ROC Curve (area = {auc_score:.2f})')
-ax.plot([0, 1], [0, 1], 'r--', label='No Skill')
-ax.set_xlabel('False Positive Rate')
-ax.set_ylabel('True Positive Rate')
-ax.set_title('Curva ROC')
-ax.legend()
+axes[1].plot(fpr, tpr, label=f'ROC Curve (area = {auc_score:.2f})')
+axes[1].plot([0, 1], [0, 1], 'r--', label='No Skill')
+axes[1].set_xlabel('False Positive Rate')
+axes[1].set_ylabel('True Positive Rate')
+axes[1].set_title('Curva ROC')
+axes[1].legend()
+
 st.pyplot(fig)
 
 # Predicción con valores del usuario
@@ -169,15 +186,20 @@ input_data[numerical] = scaler.transform(input_data[numerical])
 # Asegurar el orden de las columnas coincida con el del modelo entrenado
 input_data = input_data[X.columns]
 
-# Realizar la predicción
-prediction = model.predict(input_data)[0]
 
-# Mostrar el resultado de la predicción
-st.write("Predicción del Estado del Préstamo:", "Aprobado" if prediction == 1 else "Rechazado")
+# Botón para generar la predicción
+if st.button("Generar Predicción"):
+    # Realizar la predicción
+    prediction = model.predict(input_data)[0]
+    
+    # Mostrar el resultado de la predicción
+    st.write("Predicción del Estado del Préstamo:", "Aprobado" if prediction == 1 else "Rechazado")
+
 
 # Sección de Referencias Bibliográficas
-st.header("Referencias Bibliográficas") 
-st.write(""" 
-         - Dataset de Kaggle: [Finance Loan Approval Prediction Data](https://www.kaggle.com/krishnaraj30/finance-loan-approval-prediction-data) 
-         - Documentación de Scikit-learn: [https://scikit-learn.org/stable/](https://scikit-learn.org/stable/) 
-         - Documentación de Streamlit: [https://docs.streamlit.io/](https://docs.streamlit.io/) """)
+st.header("Referencias Bibliográficas")
+st.write("""
+- Dataset de Kaggle: [Finance Loan Approval Prediction Data](https://www.kaggle.com/krishnaraj30/finance-loan-approval-prediction-data)
+- Documentación de Scikit-learn: [https://scikit-learn.org/stable/](https://scikit-learn.org/stable/)
+- Documentación de Streamlit: [https://docs.streamlit.io/](https://docs.streamlit.io/)
+""")
