@@ -55,7 +55,7 @@ for var in numerical:
 #total_data.isna().sum()
 
 # 6. Identificación de outliers
- from sklearn.impute import SimpleImputer
+from sklearn.impute import SimpleImputer
 
 # Impute missing values in categorical features with mode
 categorical_imputer = SimpleImputer(strategy='most_frequent')
